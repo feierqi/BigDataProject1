@@ -14,49 +14,46 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
         
 public class ReportTransInfo {
         
- public static class Map extends Mapper<LongWritable, Text, Text, Text> {
+ public static class Map extends Mapper<LongWritable, Text, IntWritable, FloatWritable> {
  
-    private Text customerName = new Text();
-	private Text transactionInfo = new Text();
+    private IntWritable customerID = new IntWritable(0);
+	private FloatWritable transactionTotal = new FloatWritable(0.0);
         
-    public void map(LongWritable key, Text value, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
+    public void map(LongWritable key, Text value, OutputCollector<IntWritable, FloatWritable> output, Reporter reporter) throws IOException {
 	
         String line = value.toString();
 		String[] splits = line.split(",");
-		CustomerName.set(splits[1]);
-		transactionInfo.set(splits[3] + "," + splits[2]);
-		output.collect(customerName, transactionInfo);
+		customerID.set(Integer.parseInt(splits[1]));
+		transactionTotal.set(Float.parseFloat(splits[2]));
+		output.collect(customerID, transactionTotal);
     }
  } 
- public static class Reduce extends MapReduceBase implements Reducer<Text, Text, Text, Text>{
+ public static class Reduce extends MapReduceBase implements Reducer<IntWritable, FloatWritable, IntWritable, Text>{
  
-	Hashtable<String, String> transInfo = new Hashtable<String, String>();
+	Hashtable<Integer, String> transInfo = new Hashtable<Integer, String>();
 	
-	public void reduce(Text key, Iterator<Text> values, OutputCollector<Text, Text> output, Reporter reporter)throws IOException {
-			int transNum;
+	public void reduce(IntWritable key, Iterator<FloatWritable> values, OutputCollector<IntWritable, Text> output, Reporter reporter)throws IOException {
+			int count;
 			float transTotal;
 			
 			while (values.hasNext()) {
-				String line = values.next().toString();
-				String[] splits = line.split(",");
-
-				transNum = Integer.parseInt(splits[0]);
-				transTotal = Float.parseFloat(splits[1]);
-
-				if(!transInfo.containsKey(key)) {
-					transInfo.put(key, String.valueOf(transNum) + "," + String.valueOf(transTotal));
+				
+				transTotal = values.next().get();
+				
+				if(!transInfo.containsKey(key.get())) {
+					transInfo.put(key.get(), String.valueOf(1) + "," + String.valueOf(transTotal));
 				}
 				else{
 					String[] currentValues = transInfo.get(key).split(",");
-					final int currentTransNum = currentValues[0];
-					final float currentTransTotal = currentValues[1];
-					transInfo.put(currentKey, String.valueOf(transNum + currentTransNum) + "," + String.valueOf(transTotal + currentTransTotal));
+					count = Integer.parseInt(currentValues[0]) + 1;
+					final float currentTransTotal = Float.parseFloat(currentValues[1]) + transTotal;
+					transInfo.put(key.get(), String.valueOf(count) + "," + String.valueOf(currentTransTotal));
 				}
 			}
 	
-			ArrayList<java.util.Map.Entry<String, String>> entries = new ArrayList(transInfo.entrySet());
-			for(java.util.Map.Entry<String, String> entry: entries) {
-				output.collect(new Text(entry.getKey()), new Text(entry.getValue()));	
+			ArrayList<java.util.Map.Entry<Integer, String>> entries = new ArrayList(transInfo.entrySet());
+			for(java.util.Map.Entry<Integer, String> entry: entries) {
+				output.collect(new IntWritable(entry.getKey()), new Text(entry.getKey() + "," + entry.getValue()));	 
 			}
 	}
  }
@@ -66,7 +63,7 @@ public class ReportTransInfo {
         
     Job job = new Job(conf, "ReportTransInfo");
     
-    job.setOutputKeyClass(Text.class);
+    job.setOutputKeyClass(IntWritable.class);
     job.setOutputValueClass(Text.class);
         
     job.setMapperClass(Map.class);
