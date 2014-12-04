@@ -24,12 +24,16 @@ public class ReportCountryCode {
 		final int countryCode = Integer.parseInt(splits[3]);
 		if(countryCode >= 2 && countryCode <= 6){
 			CustomerName.set(splits[1]);
-			output.collect(country, one);
+			output.collect(CustomerName, one);
 		}
     }
  } 
         
  public static void main(String[] args) throws Exception {
+	if(args.length != 2){
+		System.err.println("Usage: ReportCountryCode <input path> <output path>");
+		System.exit(-1);
+	}
     Configuration conf = new Configuration(ReportCountryCode.class);
         
     Job job = new Job(conf, "ReportCountryCode");

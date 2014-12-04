@@ -31,7 +31,7 @@ public class ReportCountryCustTransInfo {
 		
 		FileSplit fileSplit = (FileSplit)reporter.getInputSplit();
 		String filename = fileSplit.getPath().getName();
-		if(filename.equals("customers")) {
+		if(filename.equals("Customers")) {
 			tag = "Customer";
 			ID = Integer.parseInt(splits[0]);
 			countryCode = splits[3];

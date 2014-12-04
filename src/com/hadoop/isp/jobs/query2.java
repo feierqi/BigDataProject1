@@ -30,7 +30,7 @@ public class ReportTransInfo {
  } 
  public static class Reduce extends MapReduceBase implements Reducer<IntWritable, FloatWritable, IntWritable, Text>{
  
-	Hashtable<Integer, String> transInfo = new Hashtable<Integer, String>();
+	Map<Integer, String> transInfo = new HashMap<Integer, String>();
 	
 	public void reduce(IntWritable key, Iterator<FloatWritable> values, OutputCollector<IntWritable, Text> output, Reporter reporter)throws IOException {
 			int count;
@@ -59,6 +59,10 @@ public class ReportTransInfo {
  }
         
  public static void main(String[] args) throws Exception {
+ 	if(args.length != 2){
+		System.err.println("Usage: ReportTransInfo <input path> <output path>");
+		System.exit(-1);
+	}
     Configuration conf = new Configuration(ReportTransInfo.class);
         
     Job job = new Job(conf, "ReportTransInfo");

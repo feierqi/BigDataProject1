@@ -34,7 +34,7 @@ public class ReportCustTransInfo {
 		FileSplit fileSplit = (FileSplit)reporter.getInputSplit();
 		String filename = fileSplit.getPath().getName();
 		
-		if(filename.equals("customers")) {
+		if(filename.equals("Customers")) {
 			tag = "Customer";
 			ID = Integer.parseInt(splits[0]);
 			name = splits[1];
@@ -93,6 +93,10 @@ public class ReportCustTransInfo {
  }
         
  public static void main(String[] args) throws Exception {
+  	if(args.length != 3){
+		System.err.println("Usage: ReportCustTransInfo <input1 path> <input2 path> <output path>");
+		System.exit(-1);
+	}
     Configuration conf = new Configuration(ReportCustTransInfo.class);
         
     Job job = new Job(conf, "ReportCustTransInfo");
