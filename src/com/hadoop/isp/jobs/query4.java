@@ -18,6 +18,8 @@ public class ReportCountryCustTransInfo {
  
     private IntWritable customerID = new IntWritable(0);
 	private Text outputInfo = new Text();
+	private Map<Integer, Integer> customers = new HashMap<Integer, Integer>();
+	private Map<Integer, Float> transactions = new HashMap<Integer, Float>();
         
     public void map(LongWritable key, Text value, OutputCollector<IntWritable, Text> output, Reporter reporter) throws IOException {
 		String tag = null;
@@ -35,64 +37,60 @@ public class ReportCountryCustTransInfo {
 			tag = "Customer";
 			ID = Integer.parseInt(splits[0]);
 			countryCode = splits[3];
-			output.collect(customerID.set(ID), outputInfo.set(tag + "," + countryCode));
+			customers.put(ID, countryCode);
 		}
 		else{
 			tag = "Transaction";
 			ID = Integer.parseInt(splits[1]);
 			transTotal = Float.parseFloat(splits[2]);
-			output.collect(customerID.set(ID), outputInfo.set(tag + "," + transTotal));
+			transactions.put(ID, transTotal);
+		}
+		
+		ArrayList<java.util.Map.Entry<Integer, Float>> entries = new ArrayList(transactions.entrySet());
+		for(java.util.Map.Entry<Integer, Float> entry: entries) {
+				output.collect(new IntWritable(customers.get(entry.getKey())), new Text(customers.get(entry.getKey()) + "," + entry.getValue()));	
 		}
     }
  } 
  public static class Reduce extends MapReduceBase implements Reducer<IntWritable, Text, IntWritable, Text>{
 	
-	Map<Integer, String> custTransInfo = new HashMap<Integer, String>();
+	Map<Integer, String> countryInfo = new HashMap<Integer, String>();
 	
 	public void reduce(IntWritable key, Iterator<Text> values, OutputCollector<IntWritable, Text> output, Reporter reporter)throws IOException {
 	
 		while (values.hasNext()) {
 			String line = values.next().toString();
 			String[] splits = line.split(",");
-			if(splits[0].equals("Customer")){
-				if(!custTransInfo.containsKey(key.get())) {
-					custTransInfo.put(key.get(), splits[1] + "," + 1 + "," + "0.0" + "," + Float.MAX_VALUE + "," + Float.MIN_VALUE);
-				}
-				else{
-					String[] current = custTransInfo.get(key.get()).split(",");
-					int count = Integer.parseInt(current[1]) + 1;
-					ustTransInfo.put(key.get(), splits[1] + "," + count + "," + current[2] + "," + current[3]);
-				}
+			
+			int countryCode = Integer.parseInt(splits[0]);
+			float transTotal = Float.parseFloat(splits[1]);
+			
+			if(!countryInfo.containsKey(countryCode)) {
+				countryInfo.put(countryCode, countryCode + "," + 1 + "," + transTotal + "," + transTotal);
 			}
 			else{
-				if(!custTransInfo.containsKey(key.get())) {
-					custTransInfo.put(key.get(), "" + "," + 1 + splits[1] + "," + splits[1] + "," + splits[1]);
-				}
-				else{
-					String[] current = custTransInfo.get(key.get()).split(",");
-					int count = Integer.parseInt(current[1]) + 1;
-					final float currentTransTotal = Integer.parseInt(current[2]);
-					final float newTransTotal = Float.parseFloat(splits[1]) + currentTransTotal;
-					final float currentMinTransTotal = Float.parseFloat(current[3]);
-					final float currentMaxTransTotal = Float.parseFloat(current[4]);
-					final int currentMinItems = Integer.parseInt(current[5]);
-					final int minTransTotal = (newTransTotal < currentMinTransTotal)? newTransTotal : currentMinTransTotal;
-					final int maxTransTotal = (newTransTotal > currentMaxTransTotal)? newTransTotal : currentMaxTransTotal;
-					custTransInfo.put(key.get(), current[0] + "," + count + "," + newTransTotal + "," + minTransTotal + "," + maxTransTotal);
-				}
+				String[] current = custTransInfo.get(key.get()).split(",");
+				int count = Integer.parseInt(current[1]) + 1;
+				final float currentMinTransTotal = Integer.parseInt(current[2]);
+				final float currentMaxTransTotal = Integer.parseInt(current[3]);
+				final int minTransTotal = (transTotal < currentMinTransTotal)? transTotal : currentMinTransTotal;
+				final int maxTransTotal = (transTotal > currentMaxTransTotal)? transTotal : currentMaxTransTotal;
+				countryInfo.put(countryCode, current[0] + "," + count + "," + minTransTotal + "," + maxTransTotal);
 			}
 		}
 		
-		ArrayList<java.util.Map.Entry<Integer, String>> entries = new ArrayList(custTransInfo.entrySet());
+		ArrayList<java.util.Map.Entry<Integer, String>> entries = new ArrayList(countryInfo.entrySet());
 		for(java.util.Map.Entry<Integer, String> entry: entries) {
-				String[] values = entry.getValue().split(",");
-				String selectedValue = values[0] + "," + values[1] + "," + values[3] + "," + values[4];
-				output.collect(new IntWritable(entry.getKey()), new Text(selectedValue));	
+				output.collect(new IntWritable(entry.getKey()), new Text(entry.getValue()));	
 		}
 	}
  }
         
  public static void main(String[] args) throws Exception {
+   	if(args.length != 3){
+		System.err.println("Usage: ReportCustTransInfo <input1 path> <input2 path> <output path>");
+		System.exit(-1);
+	}
     Configuration conf = new Configuration(ReportCountryCustTransInfo.class);
         
     Job job = new Job(conf, "ReportCountryCustTransInfo");
