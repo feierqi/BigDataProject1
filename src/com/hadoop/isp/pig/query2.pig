@@ -1,4 +1,4 @@
-A = load 'transactions.txt' USING PigStorage(',') as (TransID, CustID, TransTotal, TransNumItems, TransDesc);
-B = Group A by CustID
-C = foreach B Generate group as CustID, COUNT(A), SUM(A.TransTotal);
-STORE C INTO 'pig2';
+transactions = LOAD '/tmp/Transactions.txt' USING PigStorage(',') AS (TransID:int, CustID:int, TransTotal:float, TransNumItems:int, TransDesc:chararray);
+grouped_transactions = GROUP transactions by CustID;
+result = FOREACH grouped_transactions GENERATE group, COUNT(transactions), SUM(transactions.TransTotal);
+STORE result INTO 'pig2_2nd_try' USING PigStorage(',');

@@ -1,6 +1,5 @@
-package com.hadoop.isp;
-        
 import java.io.IOException;
+import java.lang.InterruptedException;
 import java.util.*;
         
 import org.apache.hadoop.fs.Path;
@@ -18,13 +17,13 @@ public class ReportCountryCode {
     private final static IntWritable one = new IntWritable(1);
     private Text customerName = new Text();
         
-    public void map(LongWritable key, Text value, OutputCollector<Text, IntWritable> output, Reporter reporter) throws IOException {
+    public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
         String line = value.toString();
 		String[] splits = line.split(",");
 		final int countryCode = Integer.parseInt(splits[3]);
 		if(countryCode >= 2 && countryCode <= 6){
-			CustomerName.set(splits[1]);
-			output.collect(CustomerName, one);
+			customerName.set(splits[1]);
+			context.write(customerName, one);
 		}
     }
  } 
@@ -34,9 +33,11 @@ public class ReportCountryCode {
 		System.err.println("Usage: ReportCountryCode <input path> <output path>");
 		System.exit(-1);
 	}
-    Configuration conf = new Configuration(ReportCountryCode.class);
+    //Configuration conf = new Configuration(ReportCountryCode.class);
         
-    Job job = new Job(conf, "ReportCountryCode");
+    Job job = new Job();
+	job.setJarByClass(ReportCountryCode.class);
+	job.setJobName("Report Country Code");
     
     job.setOutputKeyClass(Text.class);
     job.setOutputValueClass(IntWritable.class);
@@ -49,7 +50,7 @@ public class ReportCountryCode {
     FileInputFormat.addInputPath(job, new Path(args[0]));
     FileOutputFormat.setOutputPath(job, new Path(args[1]));
         
-    JobClient.runJob(conf);
+    System.exit(job.waitForCompletion(true) ? 0 : 1);
  }
         
 }
