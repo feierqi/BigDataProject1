@@ -1,7 +1,12 @@
 import java.io.IOException;
 import java.lang.InterruptedException;
 import java.util.*;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader; 
+import java.net.URI;
 
+import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.io.*;
@@ -16,122 +21,87 @@ public class ReportCountryCustTransInfo {
         
  public static class Map extends Mapper<LongWritable, Text, IntWritable, Text> {
  
-    private IntWritable customerID = new IntWritable(0);
-	private Text outputInfo = new Text();
+	private BufferedReader brReader;
+	private java.util.Map<Integer, Integer> customers = new HashMap<Integer, Integer>();
 
+	public void setup(Context context) throws IOException, InterruptedException {
+ 
+		Path[] cacheFilesLocal = DistributedCache.getLocalCacheFiles(context.getConfiguration());
+ 
+		for (Path eachPath : cacheFilesLocal) {
+			String strLineRead = "";
+ 
+			try {
+				brReader = new BufferedReader(new FileReader(eachPath.toString()));
+ 
+				// Read each line, split and load to HashMap
+				while ((strLineRead = brReader.readLine()) != null) {
+					String[] splits = strLineRead.split(",");
+					int ID = Integer.parseInt(splits[0]);
+					int countryCode = Integer.parseInt(splits[3]);
+					customers.put(ID, countryCode);
+				}
+			}catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}finally {
+				if (brReader != null) {
+					brReader.close();
+				}
+ 
+			}
+ 
+		} 
+ 
+	} 																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																			
         
     public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-		String tag = null;
+		
 		int ID = 0;
-		float transTotal = 0;
-
-		String line = value.toString();
+		
+        String line = value.toString();
 		String[] splits = line.split(",");
 
-		FileSplit fileSplit = (FileSplit)context.getInputSplit();
-		String filename = fileSplit.getPath().getName();
-
-		if(filename.contains("Customers")) {
-			tag = "Customer";
-			ID = Integer.parseInt(splits[0]);
-			customerID.set(ID);
-			outputInfo.set(tag + "," + splits[3]);
-			context.write(customerID, outputInfo);
-		}
-		else{
-			tag = "Transaction";
-			ID = Integer.parseInt(splits[1]);
-			transTotal = Float.parseFloat(splits[2]);
-			customerID.set(ID);
-			outputInfo.set(tag + "," + transTotal);
-			context.write(customerID, outputInfo);
-		}
-	}
+		ID = Integer.parseInt(splits[1]);
+		context.write(new IntWritable(customers.get(ID)), new Text(customers.get(ID) + "," + 1 + "," + splits[2]));	
+    }
  } 
  public static class Reduce extends Reducer<IntWritable, Text, IntWritable, Text>{
 	
-	java.util.Map<Integer, String> countryInfo = new HashMap<Integer, String>();
-	java.util.Map<Integer, String> combinedCountryInfo = new HashMap<Integer, String>();
-	
 	public void reduce(IntWritable key, Iterable<Text> values, Context context)throws IOException, InterruptedException {
+		int count = 0;
+		float minTransTotal = Float.MAX_VALUE;
+		float maxTransTotal = Float.MIN_VALUE;
 	
 		for(Text value : values) {
-				String line = value.toString();
-				String[] splits = line.split(",");
-
-				if(splits[0].equals("Customer")){
-					if(!countryInfo.containsKey(key.get())) {
-						countryInfo.put(key.get(), splits[1] + "," + Float.MAX_VALUE + "," + Float.MIN_VALUE);
-					}
-					else{
-						String[] current = countryInfo.get(key.get()).split(",");
-						countryInfo.put(key.get(), splits[1] + "," + current[1] + "," + current[2]);
-					}
-				}
-				else{
-					if(!countryInfo.containsKey(key.get())) {
-						countryInfo.put(key.get(), "" + "," + splits[1] + "," + splits[1]);
-					}
-					else{
-						String[] current = countryInfo.get(key.get()).split(",");
-						final float transTotal = Float.parseFloat(splits[1]);
-						final float currentMinTransTotal = Float.parseFloat(current[1]);
-						final float currentMaxTransTotal = Float.parseFloat(current[2]);
-						final float newMin = (transTotal < currentMinTransTotal)? transTotal : currentMinTransTotal;
-						final float newMax = (transTotal > currentMinTransTotal)? transTotal : currentMaxTransTotal;
-						countryInfo.put(key.get(), current[0] + "," + newMin + "," + newMax);
-					}
-				}
+			String line = value.toString();
+			String[] splits = line.split(",");
+			
+			int countryCode = Integer.parseInt(splits[0]);
+			float transTotal = Float.parseFloat(splits[2]);
+			
+			count += Integer.parseInt(splits[1]);
+			minTransTotal = (transTotal < minTransTotal)? transTotal : minTransTotal;
+			maxTransTotal = (transTotal > maxTransTotal)? transTotal : maxTransTotal;
 		}
-
-	}
-
-	private void combineCountryCode() {
-		ArrayList<java.util.Map.Entry<Integer, String>> entries = new ArrayList<java.util.Map.Entry<Integer, String>>(countryInfo.entrySet());
-		for(java.util.Map.Entry<Integer, String> entry: entries) {
-			String[] splits = entry.getValue().split(",");
-			final int countryCode = Integer.parseInt(splits[0]);
-			if(!combinedCountryInfo.containsKey(countryCode)) {
-				combinedCountryInfo.put(countryCode, countryCode + "," + 1 + "," + splits[1] + "," + splits[2]);
-			}
-			else{
-				String[] current = combinedCountryInfo.get(countryCode).split(",");
-				int count = Integer.parseInt(current[1]) + 1;
-				final float minTransTotal = Float.parseFloat(splits[1]);
-				final float maxTransTotal = Float.parseFloat(splits[2]);
-				final float currentMinTransTotal = Float.parseFloat(current[2]);
-				final float currentMaxTransTotal = Float.parseFloat(current[3]);
-				final float newMin = (minTransTotal < currentMinTransTotal)? minTransTotal : currentMinTransTotal;
-				final float newMax = (maxTransTotal > currentMinTransTotal)? maxTransTotal : currentMaxTransTotal;
-				combinedCountryInfo.put(countryCode, countryCode + "," + count + "," + newMin + "," + newMax);
-			}
-		}
-	}
-		
-
-	public void cleanup(Context context){
-		try{
-			combineCountryCode();
-			ArrayList<java.util.Map.Entry<Integer, String>> entries = new ArrayList<java.util.Map.Entry<Integer, String>>(combinedCountryInfo.entrySet());
-			for(java.util.Map.Entry<Integer, String> entry: entries) {
-					context.write(new IntWritable(entry.getKey()), new Text(entry.getValue()));	
-			}
-		}catch (Exception e){
-			System.err.println("cleanup function error");
-			System.exit(-1);
-		}
+		context.write(null, new Text(key.get() + "," + count + "," + minTransTotal + "," + maxTransTotal));
 	}
  }
         
  public static void main(String[] args) throws Exception {
-   	if(args.length != 3){
-		System.err.println("Usage: ReportCustTransInfo <input1 path> <input2 path> <output path>");
+   	if(args.length != 2){
+		System.err.println("Usage: ReportCustTransInfo <input path> output path>");
 		System.exit(-1);
 	}
+
+	final String NAME_NODE = "hdfs://localhost:3351";
     
     Job job = new Job();
 	job.setJarByClass(ReportCountryCustTransInfo.class);
 	job.setJobName("ReportCountryCustTransInfo");
+
+	DistributedCache.addCacheFile(new URI(NAME_NODE + "/tmp/Customers.txt"), job.getConfiguration());
 
     job.setOutputKeyClass(IntWritable.class);
     job.setOutputValueClass(Text.class);
@@ -143,8 +113,7 @@ public class ReportCountryCustTransInfo {
     job.setOutputFormatClass(TextOutputFormat.class);
         
     FileInputFormat.addInputPath(job, new Path(args[0]));
-	FileInputFormat.addInputPath(job, new Path(args[1]));
-    FileOutputFormat.setOutputPath(job, new Path(args[2]));
+    FileOutputFormat.setOutputPath(job, new Path(args[1]));
         
     System.exit(job.waitForCompletion(true) ? 0 : 1);
  }
